@@ -21,6 +21,7 @@
 #define ETA 0.5
 #define GAMA 0.5
 #define QSIZE 10000
+#define ENDGAME 3
 
 
 typedef struct qvalue_t{
@@ -36,6 +37,9 @@ uint32_t globalQvalueCounter=0;
 uint32_t gameCounter=0;
 uint32_t qsize = QSIZE;
 qvalue_t* q;
+uint32_t maxscore = 0;
+double epsilon = 0.999;
+uint8_t endgame = 2;
 
 void getColor(uint8_t value, char *color, size_t length) {
 	uint8_t original[] = {8,255,1,255,2,255,3,255,4,255,5,255,6,255,7,255,9,0,10,0,11,0,12,0,13,0,14,0,255,0,255,0};
@@ -147,6 +151,7 @@ bool slideArray(uint8_t array[SIZE]) {
 	}
 	return success;
 }
+
 
 void rotateBoard(uint8_t board[SIZE][SIZE]) {
 	uint8_t i,j,n=SIZE;
@@ -392,6 +397,22 @@ bool move(int direction, uint8_t board[SIZE][SIZE]){
 	}
 }
 
+
+bool win(uint8_t board[SIZE][SIZE] ){
+
+	if( globalQvalueCounter > endgame * 315)
+		endgame++;
+
+	for (int x=0;x<SIZE;x++) {
+		for (int y=0;y<SIZE;y++) {
+			if(board[x][y] == endgame)
+					return true;
+		}
+	}
+	return false;
+}
+
+
 /* This function return a string corresponding to a unique identifier for a state */
 char* computerStateHash(uint8_t board[SIZE][SIZE]){
 
@@ -434,6 +455,23 @@ uint32_t getMax( qvalue_t* qvalue ){
 
 	return max;
 }
+
+
+/* GET MAX INDICE */
+uint32_t getMaxIndex( qvalue_t* qvalue ){
+
+	uint32_t maxIndex = rand()%4;
+	uint32_t max = 0;
+	for(int i=0; i<4; i++){
+
+		if(qvalue->actions[i] > max)
+			max = qvalue->actions[i];
+			maxIndex = i;
+	}
+
+	return maxIndex;
+}
+
 
 void updateQ(char* state, uint8_t action, uint32_t maxQnext){
 
@@ -556,7 +594,27 @@ int main(int argc, char *argv[]) {
 		state = computerStateHash(board);
 
 		//Take a random move
-		action = rand()%4;
+		if( (double) ((rand()%10000)/10000) < epsilon )
+			action = rand()%4;
+		else{
+
+			//Get qvalue for this state
+			qvalue_t* currentQvalue = NULL;
+
+			for(int i=0; i<globalQvalueCounter; i++){
+
+				if( strcmp(state, q[i].stateHash ) == 0  ){
+					currentQvalue = &q[i];
+
+				}
+			}
+
+			action = getMaxIndex( currentQvalue );
+
+
+		}
+
+		epsilon *= 0.999;
 		success = move( action , board );
 		stepsCounter++;
 
@@ -576,24 +634,32 @@ int main(int argc, char *argv[]) {
 
 		if (success) {
 			//drawBoard(board);
-			//usleep(1500);
+			//usleep(200000);
 			addRandom(board);
 			//drawBoard(board);
 
 			//Debug
-			if( stepsCounter%100 == 0){
+			if( stepsCounter%10000 == 0){
 			printf("\n\n\n");
 			printf("state hash: %s\n", state );
 			printf("number of new q-values: %d\n", globalQvalueCounter );
 			printf("number of new games: %d\n", gameCounter );
 			printf("number of moves: %d\n", stepsCounter );
-			printf("first q value. state hash %s, %f - %f - %f - %f\n", q[0].stateHash, q[0].actions[0], q[0].actions[1], q[0].actions[2], q[0].actions[3] );
+			//snprintf("\uD83D\uDCA9 max score: %d\n", maxscore );
+
+		//	printf("q value. state hash %s, %f - %f - %f - %f\n", q[0].stateHash, q[0].actions[0], q[0].actions[1], q[0].actions[2], q[0].actions[3] );
+		//	printf("q value. state hash %s, %f - %f - %f - %f\n", q[2].stateHash, q[2].actions[0], q[2].actions[1], q[2].actions[2], q[2].actions[3] );
+
 			drawBoard(board);
 			}
 
-			if (gameEnded(board)) {
+			if ( gameEnded(board) || win(board) ) {
 				//printf("         GAME OVER          \n");
 				gameCounter++;
+
+				if( score > maxscore )
+					maxscore = score;
+
 				//usleep(150000);
 				//TODO: Save score
 				initBoard(board);
